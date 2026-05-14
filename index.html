@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OSHA 30 Construction — Study Program</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app">
+    <header id="top-nav">
+      <div class="nav-brand">
+        <span class="nav-logo">⚠</span>
+        <div>
+          <div class="nav-title">OSHA 30 Construction</div>
+          <div class="nav-sub">Study Program</div>
+        </div>
+      </div>
+      <div class="nav-links">
+        <a href="#dashboard" class="nav-link" id="nav-dashboard">Dashboard</a>
+        <a href="#exam" class="nav-link" id="nav-exam">Final Exam</a>
+      </div>
+      <div class="nav-progress-wrap">
+        <span id="nav-progress-label">0 / 20 modules</span>
+        <div class="nav-progress-bar"><div id="nav-progress-fill"></div></div>
+      </div>
+    </header>
+
+    <main id="main-content">
+      <!-- Views rendered here by app.js -->
+    </main>
+  </div>
+
+  <div id="modal-overlay" class="hidden">
+    <div id="modal-box">
+      <div id="modal-content"></div>
+      <div id="modal-actions"></div>
+    </div>
+  </div>
+
+  <script src="js/modules-data.js"></script>
+  <script src="js/modules-data2.js"></script>
+  <script src="js/exam-data.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

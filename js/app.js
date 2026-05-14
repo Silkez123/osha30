@@ -1,0 +1,653 @@
+/* ── OSHA 30 Construction Study App ── */
+
+// ── Progress (localStorage) ──────────────────────────────────────
+const Progress = {
+  key: 'osha30',
+  _get(k) { try { return JSON.parse(localStorage.getItem(this.key + '_' + k) || 'null'); } catch { return null; } },
+  _set(k, v) { localStorage.setItem(this.key + '_' + k, JSON.stringify(v)); },
+
+  getCompleted() { return this._get('completed') || []; },
+  markComplete(id) {
+    const c = this.getCompleted();
+    if (!c.includes(id)) { c.push(id); this._set('completed', c); }
+    updateNavProgress();
+  },
+  isComplete(id) { return this.getCompleted().includes(id); },
+
+  getScores() { return this._get('scores') || {}; },
+  saveScore(id, score, total) {
+    const s = this.getScores();
+    const pct = Math.round((score / total) * 100);
+    if (!s[id] || pct > s[id].pct) { s[id] = { score, total, pct, date: new Date().toLocaleDateString() }; }
+    this._set('scores', s);
+    if (pct >= 70) this.markComplete(id);
+  },
+  getScore(id) { return (this.getScores())[id] || null; },
+
+  getExamHistory() { return this._get('exams') || []; },
+  saveExamResult(result) {
+    const h = this.getExamHistory();
+    h.unshift(result);
+    this._set('exams', h.slice(0, 10));
+  },
+
+  resetAll() {
+    ['completed','scores','exams'].forEach(k => localStorage.removeItem(this.key + '_' + k));
+    updateNavProgress();
+  }
+};
+
+// ── State ────────────────────────────────────────────────────────
+let currentView = '';
+let quizState = null;
+let examState = null;
+
+// ── Nav & Progress ────────────────────────────────────────────────
+function updateNavProgress() {
+  const done = Progress.getCompleted().length;
+  const total = MODULES.length;
+  document.getElementById('nav-progress-label').textContent = `${done} / ${total} modules`;
+  document.getElementById('nav-progress-fill').style.width = `${(done / total) * 100}%`;
+  document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
+  const hash = location.hash.split('/')[0];
+  const activeEl = document.getElementById(hash === '#exam' ? 'nav-exam' : 'nav-dashboard');
+  if (activeEl) activeEl.classList.add('active');
+}
+
+// ── Router ────────────────────────────────────────────────────────
+function route() {
+  const hash = location.hash || '#dashboard';
+  const [view, param] = hash.slice(1).split('/');
+  updateNavProgress();
+
+  if (view === 'dashboard' || view === '') renderDashboard();
+  else if (view === 'module' && param) renderModuleView(parseInt(param));
+  else if (view === 'quiz' && param) renderQuizView(parseInt(param));
+  else if (view === 'exam') renderExamStart();
+  else renderDashboard();
+}
+
+window.addEventListener('hashchange', route);
+window.addEventListener('load', route);
+
+function navigate(hash) { location.hash = hash; }
+
+// ── Main Content Helper ───────────────────────────────────────────
+function setMain(html) { document.getElementById('main-content').innerHTML = html; }
+
+// ── Dashboard ────────────────────────────────────────────────────
+function renderDashboard() {
+  currentView = 'dashboard';
+  const completed = Progress.getCompleted();
+  const scores = Progress.getScores();
+  const exams = Progress.getExamHistory();
+  const bestExam = exams.length ? Math.max(...exams.map(e => e.pct)) : null;
+  const avgScore = Object.values(scores).length
+    ? Math.round(Object.values(scores).reduce((a, s) => a + s.pct, 0) / Object.values(scores).length)
+    : null;
+
+  const moduleCards = MODULES.map(m => {
+    const done = completed.includes(m.id);
+    const sc = scores[m.id];
+    return `
+      <div class="module-card ${done ? 'completed' : ''}" onclick="navigate('#module/${m.id}')">
+        <div class="module-card-top">
+          <div class="module-icon">${m.icon}</div>
+          <div class="module-info">
+            <div class="module-num">Module ${m.id} of ${MODULES.length}</div>
+            <div class="module-title">${m.title}</div>
+            <div class="module-sub">${m.subtitle}</div>
+          </div>
+        </div>
+        <div class="module-card-footer">
+          <span class="module-time">⏱ ${m.estimatedTime}</span>
+          ${done
+            ? `<span class="badge badge-done">✓ Done${sc ? ` · ${sc.pct}%` : ''}</span>`
+            : sc
+              ? `<span class="badge badge-inprogress">Quiz: ${sc.pct}%</span>`
+              : `<span class="badge badge-start">Start →</span>`
+          }
+        </div>
+      </div>`;
+  }).join('');
+
+  setMain(`
+    <div class="dashboard">
+      <div class="dashboard-header">
+        <h1>OSHA 30 Construction Study Program</h1>
+        <p>Work through all 20 modules, pass the practice quizzes, then take the final exam simulation.</p>
+      </div>
+      <div class="stats-row">
+        <div class="stat-card orange"><div class="stat-val">${completed.length}</div><div class="stat-label">Modules Completed</div></div>
+        <div class="stat-card"><div class="stat-val">${MODULES.length - completed.length}</div><div class="stat-label">Modules Remaining</div></div>
+        <div class="stat-card blue"><div class="stat-val">${avgScore !== null ? avgScore + '%' : '—'}</div><div class="stat-label">Avg Quiz Score</div></div>
+        <div class="stat-card green"><div class="stat-val">${bestExam !== null ? bestExam + '%' : '—'}</div><div class="stat-label">Best Exam Score</div></div>
+      </div>
+      <div class="section-heading">Study Modules</div>
+      <div class="modules-grid">${moduleCards}</div>
+
+      <div class="exam-cta">
+        <div class="exam-cta-text">
+          <h2>📋 Final Exam Simulation</h2>
+          <p>100 questions · 2-hour timer · 70% required to pass · Covers all 20 modules</p>
+        </div>
+        <div class="exam-cta-actions">
+          ${exams.length ? `<button class="btn btn-ghost" onclick="navigate('#exam-history')">History</button>` : ''}
+          <button class="btn btn-primary btn-lg" onclick="navigate('#exam')">Take Exam →</button>
+        </div>
+      </div>
+
+      ${completed.length > 0 ? `
+        <div style="text-align:right;margin-top:16px;">
+          <button class="btn btn-outline" style="font-size:0.8rem;padding:7px 14px;"
+            onclick="confirmReset()">Reset Progress</button>
+        </div>` : ''}
+    </div>`);
+}
+
+function confirmReset() {
+  showModal(
+    'Reset All Progress?',
+    'This will clear all completed modules, quiz scores, and exam history. This cannot be undone.',
+    `<button class="btn" style="background:var(--border);color:var(--text);" onclick="hideModal()">Cancel</button>
+     <button class="btn btn-danger" onclick="Progress.resetAll();hideModal();renderDashboard();">Reset Everything</button>`
+  );
+}
+
+// ── Module View ───────────────────────────────────────────────────
+function renderModuleView(id) {
+  currentView = 'module';
+  const mod = MODULES.find(m => m.id === id);
+  if (!mod) { navigate('#dashboard'); return; }
+
+  const sidebarSections = mod.sections.map((s, i) =>
+    `<div class="sidebar-section" id="sidebar-sec-${i}" onclick="scrollToSection(${i})">${s.title}</div>`
+  ).join('');
+
+  const hasScore = Progress.getScore(id);
+  const quizBtnLabel = hasScore
+    ? `Retake Quiz (Best: ${hasScore.pct}%)`
+    : 'Take Quiz →';
+
+  const factsList = mod.keyFacts.map(f => `<li>${f}</li>`).join('');
+
+  const contentSections = mod.sections.map((s, i) =>
+    `<div class="content-section" id="section-${i}"><h2>${s.title}</h2>${s.content}</div>`
+  ).join('');
+
+  setMain(`
+    <div class="module-view">
+      <nav class="module-sidebar">
+        <div class="sidebar-back" onclick="navigate('#dashboard')">← Back to Dashboard</div>
+        <div class="sidebar-module-title">Module ${mod.id} — ${mod.title}</div>
+        ${sidebarSections}
+        <button class="sidebar-quiz-btn" onclick="navigate('#quiz/${id}')">${quizBtnLabel}</button>
+      </nav>
+      <div class="module-content">
+        <div class="module-content-header">
+          <div class="module-num-label">Module ${mod.id} of ${MODULES.length}</div>
+          <h1>${mod.title}</h1>
+          <p class="module-desc">${mod.subtitle} · ⏱ ${mod.estimatedTime}</p>
+        </div>
+        <div class="key-facts-box">
+          <h3>★ Key Facts to Know</h3>
+          <ul>${factsList}</ul>
+        </div>
+        ${contentSections}
+        <div class="section-nav">
+          ${id > 1 ? `<button class="btn btn-outline" onclick="navigate('#module/${id-1}')">← Module ${id-1}</button>` : '<span></span>'}
+          <button class="btn btn-primary" onclick="navigate('#quiz/${id}')">Take Quiz →</button>
+          ${id < MODULES.length ? `<button class="btn btn-outline" onclick="navigate('#module/${id+1}')">Module ${id+1} →</button>` : '<span></span>'}
+        </div>
+      </div>
+    </div>`);
+
+  // Sidebar scroll tracking
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        const idx = entry.target.id.split('-')[1];
+        document.querySelectorAll('.sidebar-section').forEach(el => el.classList.remove('active'));
+        const sidebar = document.getElementById('sidebar-sec-' + idx);
+        if (sidebar) sidebar.classList.add('active');
+      }
+    });
+  }, { threshold: 0.3 });
+  mod.sections.forEach((_, i) => {
+    const el = document.getElementById('section-' + i);
+    if (el) observer.observe(el);
+  });
+}
+
+function scrollToSection(i) {
+  const el = document.getElementById('section-' + i);
+  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// ── Quiz View ─────────────────────────────────────────────────────
+function renderQuizView(id) {
+  currentView = 'quiz';
+  const mod = MODULES.find(m => m.id === id);
+  if (!mod) { navigate('#dashboard'); return; }
+
+  quizState = {
+    moduleId: id,
+    questions: shuffleArray([...mod.quiz]),
+    current: 0,
+    answers: [],
+    revealed: false
+  };
+  renderQuizQuestion();
+}
+
+function renderQuizQuestion() {
+  const { questions, current, answers, moduleId } = quizState;
+  const q = questions[current];
+  const total = questions.length;
+  const mod = MODULES.find(m => m.id === moduleId);
+  const userAnswer = answers[current];
+  const revealed = quizState.revealed;
+
+  const optionsHtml = q.options.map((opt, i) => {
+    let cls = '';
+    if (revealed) {
+      if (i === q.a) cls = 'correct';
+      else if (i === userAnswer && userAnswer !== q.a) cls = 'incorrect';
+    } else if (i === userAnswer) cls = 'selected';
+    const letters = ['A','B','C','D'];
+    return `<button class="option-btn ${cls}" ${revealed ? 'disabled' : ''} onclick="selectAnswer(${i})">
+      <span class="option-letter">${letters[i]}</span>
+      <span>${opt}</span>
+    </button>`;
+  }).join('');
+
+  const explanationHtml = revealed
+    ? `<div class="explanation-box"><strong>Explanation:</strong> ${q.explain}</div>`
+    : '';
+
+  setMain(`
+    <div class="quiz-view">
+      <div class="quiz-header">
+        <div class="module-num-label" style="font-size:0.78rem;font-weight:600;color:var(--orange);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;">
+          Module ${moduleId} · Quiz
+        </div>
+        <h1>${mod.title}</h1>
+        <p>${total} questions · Select the best answer for each</p>
+        <div class="quiz-progress-row">
+          <div class="quiz-progress-bar-wrap">
+            <div class="quiz-progress-bar-fill" style="width:${((current + 1) / total) * 100}%"></div>
+          </div>
+          <span class="quiz-progress-text">Question ${current + 1} of ${total}</span>
+        </div>
+      </div>
+
+      <div class="question-card">
+        <div class="question-text">${current + 1}. ${q.q}</div>
+        <div class="options-list">${optionsHtml}</div>
+        ${explanationHtml}
+      </div>
+
+      <div class="quiz-actions">
+        <button class="btn btn-outline" onclick="navigate('#module/${moduleId}')">← Back to Module</button>
+        <div style="display:flex;gap:10px;">
+          ${!revealed && userAnswer !== undefined
+            ? `<button class="btn btn-primary" onclick="revealAnswer()">Check Answer</button>`
+            : revealed
+              ? current < total - 1
+                ? `<button class="btn btn-primary" onclick="nextQuestion()">Next →</button>`
+                : `<button class="btn btn-success" onclick="finishQuiz()">See Results →</button>`
+              : `<button class="btn btn-primary" disabled style="opacity:0.4;">Select an answer</button>`
+          }
+        </div>
+      </div>
+    </div>`);
+}
+
+function selectAnswer(i) {
+  if (quizState.revealed) return;
+  quizState.answers[quizState.current] = i;
+  renderQuizQuestion();
+}
+
+function revealAnswer() {
+  quizState.revealed = true;
+  renderQuizQuestion();
+}
+
+function nextQuestion() {
+  quizState.current++;
+  quizState.revealed = false;
+  if (quizState.answers[quizState.current] !== undefined) quizState.revealed = true;
+  renderQuizQuestion();
+}
+
+function finishQuiz() {
+  const { questions, answers, moduleId } = quizState;
+  let correct = 0;
+  questions.forEach((q, i) => { if (answers[i] === q.a) correct++; });
+  const pct = Math.round((correct / questions.length) * 100);
+  Progress.saveScore(moduleId, correct, questions.length);
+  renderQuizResults(moduleId, correct, questions.length, pct, questions, answers);
+}
+
+function renderQuizResults(moduleId, score, total, pct, questions, answers) {
+  const pass = pct >= 70;
+  const mod = MODULES.find(m => m.id === moduleId);
+  const wrongItems = questions
+    .map((q, i) => ({ q, userAns: answers[i], correct: q.a }))
+    .filter(item => item.userAns !== item.correct)
+    .map(item => `
+      <div style="background:var(--bg);border-radius:8px;padding:12px 14px;margin-bottom:10px;font-size:0.88rem;">
+        <div style="font-weight:600;color:var(--navy);margin-bottom:6px;">${item.q.q}</div>
+        <div style="color:var(--red);">Your answer: ${item.q.options[item.userAns] || 'No answer'}</div>
+        <div style="color:var(--green);">Correct: ${item.q.options[item.correct]}</div>
+        <div style="color:var(--text-soft);margin-top:4px;">${item.q.explain}</div>
+      </div>`).join('');
+
+  setMain(`
+    <div class="results-view">
+      <div class="results-circle ${pass ? 'pass' : 'fail'}">
+        <div class="pct">${pct}%</div>
+        <div class="label">${score}/${total}</div>
+      </div>
+      <div class="results-title">${pass ? '🎉 Quiz Passed!' : '📚 Keep Studying'}</div>
+      <div class="results-sub">
+        ${pass
+          ? 'Great work! Module marked as complete. Move on to the next module.'
+          : 'You need 70% to pass. Review the module content and try again.'}
+      </div>
+      <div class="results-breakdown">
+        <div class="results-row"><span>Questions Correct</span><strong style="color:var(--green);">${score} / ${total}</strong></div>
+        <div class="results-row"><span>Score</span><strong>${pct}%</strong></div>
+        <div class="results-row"><span>Result</span><strong style="color:${pass ? 'var(--green)' : 'var(--red)'};">${pass ? 'PASS ✓' : 'FAIL ✗'}</strong></div>
+        <div class="results-row"><span>Passing Score</span><strong>70%</strong></div>
+      </div>
+      ${!pass && wrongItems ? `
+        <div style="text-align:left;margin-bottom:28px;">
+          <div class="section-heading" style="margin-bottom:14px;">Questions to Review</div>
+          ${wrongItems}
+        </div>` : ''}
+      <div class="results-actions">
+        <button class="btn btn-outline" onclick="navigate('#module/${moduleId}')">Review Module</button>
+        <button class="btn btn-primary" onclick="renderQuizView(${moduleId})">Retake Quiz</button>
+        ${moduleId < MODULES.length
+          ? `<button class="btn btn-success" onclick="navigate('#module/${moduleId + 1}')">Next Module →</button>`
+          : `<button class="btn btn-success" onclick="navigate('#exam')">Take Final Exam →</button>`}
+      </div>
+    </div>`);
+}
+
+// ── Exam View ─────────────────────────────────────────────────────
+function renderExamStart() {
+  currentView = 'exam-start';
+  const history = Progress.getExamHistory();
+  const historyHtml = history.length ? `
+    <div style="margin-top:32px;text-align:left;">
+      <div class="section-heading">Previous Attempts</div>
+      <table class="history-table">
+        <thead><tr><th>Date</th><th>Score</th><th>Result</th></tr></thead>
+        <tbody>
+          ${history.map(e => `
+            <tr>
+              <td>${e.date}</td>
+              <td>${e.correct}/${e.total} (${e.pct}%)</td>
+              <td><span class="${e.pass ? 'pass-chip' : 'fail-chip'}">${e.pass ? 'PASS' : 'FAIL'}</span></td>
+            </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>` : '';
+
+  setMain(`
+    <div class="exam-start">
+      <h1>Final Exam</h1>
+      <p>This simulation mirrors the actual OSHA 30-hour Construction final exam. You must score 70% or higher to pass.</p>
+      <div class="exam-info-grid">
+        <div class="exam-info-item"><div class="info-label">Questions</div><div class="info-val">100</div></div>
+        <div class="exam-info-item"><div class="info-label">Time Limit</div><div class="info-val">2 Hours</div></div>
+        <div class="exam-info-item"><div class="info-label">Passing Score</div><div class="info-val">70%</div></div>
+        <div class="exam-info-item"><div class="info-label">Topics</div><div class="info-val">All 20 Modules</div></div>
+      </div>
+      <button class="btn btn-primary btn-lg" onclick="startExam()" style="width:100%;justify-content:center;">
+        Begin Exam →
+      </button>
+      <p style="font-size:0.8rem;color:var(--text-xsoft);margin-top:16px;">
+        ⚠ This is a study tool only. It does not constitute official OSHA training or certification.
+      </p>
+      ${historyHtml}
+    </div>`);
+}
+
+function startExam() {
+  const questions = shuffleArray([...EXAM_QUESTIONS]).slice(0, 100);
+  examState = {
+    questions,
+    answers: new Array(questions.length).fill(undefined),
+    flagged: new Set(),
+    current: 0,
+    startTime: Date.now(),
+    totalSeconds: 7200,
+    timerInterval: null
+  };
+  examState.timerInterval = setInterval(tickExamTimer, 1000);
+  currentView = 'exam-active';
+  renderExamQuestion();
+}
+
+function tickExamTimer() {
+  if (!examState) return;
+  const elapsed = Math.floor((Date.now() - examState.startTime) / 1000);
+  const remaining = examState.totalSeconds - elapsed;
+  if (remaining <= 0) {
+    clearInterval(examState.timerInterval);
+    submitExam(true);
+    return;
+  }
+  const timerEl = document.getElementById('exam-timer-display');
+  if (timerEl) {
+    const m = Math.floor(remaining / 60);
+    const s = remaining % 60;
+    const timeStr = `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+    timerEl.textContent = timeStr;
+    timerEl.className = 'time' + (remaining < 300 ? ' urgent' : remaining < 900 ? ' warning' : '');
+  }
+}
+
+function renderExamQuestion() {
+  if (!examState) return;
+  const { questions, answers, flagged, current } = examState;
+  const q = questions[current];
+  const total = questions.length;
+  const answered = answers.filter(a => a !== undefined).length;
+  const elapsed = Math.floor((Date.now() - examState.startTime) / 1000);
+  const remaining = Math.max(0, examState.totalSeconds - elapsed);
+  const m = Math.floor(remaining / 60);
+  const s = remaining % 60;
+  const timeStr = `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+  const timeClass = remaining < 300 ? 'urgent' : remaining < 900 ? 'warning' : '';
+
+  const dots = questions.map((_, i) => {
+    let cls = '';
+    if (answers[i] !== undefined) cls += ' answered';
+    if (flagged.has(i)) cls = ' flagged';
+    if (i === current) cls += ' current';
+    return `<button class="exam-dot${cls}" onclick="goToExamQ(${i})" title="Q${i+1}"></button>`;
+  }).join('');
+
+  const letters = ['A','B','C','D'];
+  const optionsHtml = q.options.map((opt, i) =>
+    `<button class="option-btn ${answers[current] === i ? 'selected' : ''}" onclick="selectExamAnswer(${i})">
+      <span class="option-letter">${letters[i]}</span>
+      <span>${opt}</span>
+    </button>`
+  ).join('');
+
+  setMain(`
+    <div class="exam-view">
+      <div class="exam-header">
+        <div>
+          <h1>OSHA 30 Final Exam</h1>
+          <p>${answered} of ${total} answered · ${flagged.size} flagged</p>
+        </div>
+        <div class="exam-timer">
+          <div class="time ${timeClass}" id="exam-timer-display">${timeStr}</div>
+          <div class="time-label">REMAINING</div>
+        </div>
+      </div>
+
+      <div class="exam-nav-row">
+        <span class="exam-q-num">Question ${current + 1} of ${total}</span>
+        <div class="exam-progress-bar-wrap">
+          <div class="exam-progress-fill" style="width:${((current+1)/total)*100}%"></div>
+        </div>
+      </div>
+
+      <div class="exam-dot-row">${dots}</div>
+
+      <div class="exam-q-card">
+        <div class="exam-q-text">${current + 1}. ${q.q}</div>
+        <div class="options-list">${optionsHtml}</div>
+      </div>
+
+      <div class="exam-actions">
+        ${current > 0 ? `<button class="btn btn-outline" onclick="goToExamQ(${current-1})">← Prev</button>` : '<span></span>'}
+        <button class="btn btn-flag ${flagged.has(current) ? 'active' : ''}" onclick="toggleFlag(${current})">
+          🚩 ${flagged.has(current) ? 'Flagged' : 'Flag'}
+        </button>
+        ${current < total - 1
+          ? `<button class="btn btn-primary" onclick="goToExamQ(${current+1})">Next →</button>`
+          : `<button class="btn btn-success" onclick="confirmSubmitExam()">Submit Exam →</button>`
+        }
+      </div>
+
+      <div style="text-align:center;margin-top:24px;">
+        <button class="btn btn-danger" onclick="confirmSubmitExam()">Submit Exam</button>
+      </div>
+    </div>`);
+}
+
+function selectExamAnswer(i) {
+  if (!examState) return;
+  examState.answers[examState.current] = i;
+  renderExamQuestion();
+}
+
+function goToExamQ(i) {
+  if (!examState) return;
+  examState.current = i;
+  renderExamQuestion();
+}
+
+function toggleFlag(i) {
+  if (!examState) return;
+  if (examState.flagged.has(i)) examState.flagged.delete(i);
+  else examState.flagged.add(i);
+  renderExamQuestion();
+}
+
+function confirmSubmitExam() {
+  const { answers, questions } = examState;
+  const unanswered = answers.filter(a => a === undefined).length;
+  if (unanswered > 0) {
+    showModal(
+      'Unanswered Questions',
+      `You have ${unanswered} unanswered question${unanswered > 1 ? 's' : ''}. Are you sure you want to submit?`,
+      `<button class="btn btn-outline" onclick="hideModal()">Go Back</button>
+       <button class="btn btn-danger" onclick="hideModal();submitExam(false)">Submit Anyway</button>`
+    );
+  } else {
+    submitExam(false);
+  }
+}
+
+function submitExam(timedOut) {
+  if (!examState) return;
+  if (examState.timerInterval) clearInterval(examState.timerInterval);
+  const { questions, answers } = examState;
+  let correct = 0;
+  questions.forEach((q, i) => { if (answers[i] === q.a) correct++; });
+  const pct = Math.round((correct / questions.length) * 100);
+  const pass = pct >= 70;
+  const result = {
+    correct, total: questions.length, pct, pass,
+    date: new Date().toLocaleDateString(),
+    timedOut
+  };
+  Progress.saveExamResult(result);
+  renderExamResults(result, questions, answers);
+  examState = null;
+}
+
+function renderExamResults(result, questions, answers) {
+  currentView = 'exam-results';
+  const { correct, total, pct, pass, timedOut } = result;
+
+  // Category breakdown
+  const byModule = {};
+  questions.forEach((q, i) => {
+    const mod = q.moduleRef || 0;
+    if (!byModule[mod]) byModule[mod] = { correct: 0, total: 0, title: q.moduleName || `Module ${mod}` };
+    byModule[mod].total++;
+    if (answers[i] === q.a) byModule[mod].correct++;
+  });
+  const breakdownRows = Object.entries(byModule).map(([mod, data]) => {
+    const mpct = Math.round((data.correct / data.total) * 100);
+    return `<div class="results-row">
+      <span style="font-size:0.85rem;">${data.title}</span>
+      <strong style="color:${mpct >= 70 ? 'var(--green)' : 'var(--red)'};">${data.correct}/${data.total} (${mpct}%)</strong>
+    </div>`;
+  }).join('');
+
+  setMain(`
+    <div class="exam-results-view">
+      ${timedOut ? '<div style="background:var(--red);color:#fff;padding:10px 16px;border-radius:8px;margin-bottom:20px;font-weight:600;">Time expired — exam auto-submitted</div>' : ''}
+      <div class="exam-results-circle ${pass ? 'pass' : 'fail'}">
+        <div class="pct">${pct}%</div>
+        <div class="exam-results-status">${correct}/${total}</div>
+      </div>
+      <div class="results-title">${pass ? '🎉 Exam Passed!' : '📚 Not Quite Yet'}</div>
+      <div class="results-sub">
+        ${pass
+          ? `Excellent work! You passed with ${pct}%. You're ready for the real OSHA 30-hour exam.`
+          : `You scored ${pct}% — you need 70% to pass. Review weaker modules and try again.`}
+      </div>
+      <div class="results-breakdown">
+        <div class="results-row"><span>Questions Correct</span><strong style="color:var(--green);">${correct} / ${total}</strong></div>
+        <div class="results-row"><span>Your Score</span><strong>${pct}%</strong></div>
+        <div class="results-row"><span>Passing Score</span><strong>70%</strong></div>
+        <div class="results-row"><span>Result</span><strong style="color:${pass ? 'var(--green)' : 'var(--red)'};">${pass ? 'PASS ✓' : 'FAIL ✗'}</strong></div>
+      </div>
+      <div style="text-align:left;margin-bottom:28px;">
+        <div class="section-heading" style="margin-bottom:14px;">Performance by Topic</div>
+        <div class="results-breakdown">${breakdownRows}</div>
+      </div>
+      <div class="results-actions">
+        <button class="btn btn-outline" onclick="navigate('#dashboard')">Dashboard</button>
+        <button class="btn btn-primary" onclick="navigate('#exam')">Retake Exam</button>
+      </div>
+      <p style="font-size:0.8rem;color:var(--text-xsoft);margin-top:24px;">
+        ⚠ This is a study tool only and does not constitute official OSHA training or certification.
+      </p>
+    </div>`);
+}
+
+// ── Modal ─────────────────────────────────────────────────────────
+function showModal(title, body, actionsHtml) {
+  document.getElementById('modal-content').innerHTML = `<h2>${title}</h2><p>${body}</p>`;
+  document.getElementById('modal-actions').innerHTML = actionsHtml;
+  document.getElementById('modal-overlay').classList.remove('hidden');
+}
+function hideModal() {
+  document.getElementById('modal-overlay').classList.add('hidden');
+}
+document.getElementById('modal-overlay').addEventListener('click', function(e) {
+  if (e.target === this) hideModal();
+});
+
+// ── Utilities ─────────────────────────────────────────────────────
+function shuffleArray(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
