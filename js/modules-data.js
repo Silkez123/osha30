@@ -152,7 +152,7 @@ const MODULES_PART1 = [
   {
     id: 3, title: "Focus Four: Fall Hazards", subtitle: "The #1 Cause of Construction Fatalities",
     icon: "🪜", estimatedTime: "2 hrs",
-    videoId: "s9wGT4_s2fo",
+    videoId: "Itxon8zppI8",
     keyFacts: [
       "Falls are the #1 cause of death in the construction industry",
       "Fall protection is required at 6 feet or more in construction (29 CFR 1926.502)",
@@ -309,7 +309,7 @@ const MODULES_PART1 = [
   {
     id: 5, title: "Focus Four: Struck-By Hazards", subtitle: "Flying, Falling, Swinging & Rolling Objects",
     icon: "🪖", estimatedTime: "1 hr",
-    videoId: "hVEmGWitOvI",
+    videoId: "VZkyaIDYN1s",
     keyFacts: [
       "Struck-by hazards are the #2 cause of construction fatalities overall",
       "4 types: Flying objects, Falling objects, Swinging objects, Rolling objects",
@@ -387,7 +387,7 @@ const MODULES_PART1 = [
   {
     id: 6, title: "Focus Four: Caught-In/Between", subtitle: "Pinch Points, Cave-Ins & Machine Hazards",
     icon: "⚙️", estimatedTime: "1 hr",
-    videoId: "83tUcRoI4Cs",
+    videoId: "TOi72Rb8rz8",
     keyFacts: [
       "Caught-in/between hazards include pinch points, nip points, shear points, and unguarded rotating parts",
       "Excavation cave-ins are the deadliest caught-in/between hazard",
