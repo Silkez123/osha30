@@ -41,6 +41,7 @@ const Progress = {
 let currentView = '';
 let quizState = null;
 let examState = null;
+let fcState = null;
 
 // ── Nav & Progress ────────────────────────────────────────────────
 function updateNavProgress() {
@@ -50,7 +51,10 @@ function updateNavProgress() {
   document.getElementById('nav-progress-fill').style.width = `${(done / total) * 100}%`;
   document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
   const hash = location.hash.split('/')[0];
-  const activeEl = document.getElementById(hash === '#exam' ? 'nav-exam' : 'nav-dashboard');
+  let activeId = 'nav-dashboard';
+  if (hash === '#exam') activeId = 'nav-exam';
+  else if (hash === '#flashcards') activeId = 'nav-flashcards';
+  const activeEl = document.getElementById(activeId);
   if (activeEl) activeEl.classList.add('active');
 }
 
@@ -64,6 +68,7 @@ function route() {
   else if (view === 'module' && param) renderModuleView(parseInt(param));
   else if (view === 'quiz' && param) renderQuizView(parseInt(param));
   else if (view === 'exam') renderExamStart();
+  else if (view === 'flashcards') renderFlashcardsView(param ? parseInt(param) : null);
   else renderDashboard();
 }
 
@@ -134,6 +139,16 @@ function renderDashboard() {
         <div class="exam-cta-actions">
           ${exams.length ? `<button class="btn btn-ghost" onclick="navigate('#exam-history')">History</button>` : ''}
           <button class="btn btn-primary btn-lg" onclick="navigate('#exam')">Take Exam →</button>
+        </div>
+      </div>
+
+      <div class="exam-cta" style="background:linear-gradient(135deg,#1a4a6b 0%,#1a3a5c 100%);margin-top:16px;">
+        <div class="exam-cta-text">
+          <h2>🃏 Flashcards</h2>
+          <p>${FLASHCARDS.length} key terms across all 20 modules · Flip, review, mark what you know</p>
+        </div>
+        <div class="exam-cta-actions">
+          <button class="btn btn-primary btn-lg" onclick="navigate('#flashcards')">Study Flashcards →</button>
         </div>
       </div>
 
@@ -628,6 +643,149 @@ function renderExamResults(result, questions, answers) {
         ⚠ This is a study tool only and does not constitute official OSHA training or certification.
       </p>
     </div>`);
+}
+
+// ── Flashcards ────────────────────────────────────────────────────
+const FC = {
+  key: 'osha30_fc_known',
+  getKnown() { try { return new Set(JSON.parse(localStorage.getItem(this.key) || '[]')); } catch { return new Set(); } },
+  setKnown(s) { localStorage.setItem(this.key, JSON.stringify([...s])); },
+  markKnown(id) { const s = this.getKnown(); s.add(id); this.setKnown(s); },
+  markUnknown(id) { const s = this.getKnown(); s.delete(id); this.setKnown(s); },
+  resetAll() { localStorage.removeItem(this.key); }
+};
+
+function renderFlashcardsView(filterModuleId) {
+  currentView = 'flashcards';
+  const known = FC.getKnown();
+  const activeFilter = filterModuleId || null;
+  const filteredCards = activeFilter
+    ? FLASHCARDS.filter(c => c.moduleId === activeFilter)
+    : [...FLASHCARDS];
+
+  if (!fcState || fcState.filter !== activeFilter) {
+    fcState = { cards: filteredCards, current: 0, filter: activeFilter, flipped: false };
+  } else {
+    fcState.cards = filteredCards;
+    fcState.flipped = false;
+    if (fcState.current >= filteredCards.length) fcState.current = 0;
+  }
+
+  const totalCards = filteredCards.length;
+  const knownCount = filteredCards.filter(c => known.has(c.id)).length;
+  const learningCount = totalCards - knownCount;
+  const knownPct = totalCards ? Math.round((knownCount / totalCards) * 100) : 0;
+
+  const pillsHtml = [
+    `<button class="fc-pill ${!activeFilter ? 'active' : ''}" onclick="navigate('#flashcards')">All (${FLASHCARDS.length})</button>`,
+    ...MODULES.map(m => {
+      const count = FLASHCARDS.filter(c => c.moduleId === m.id).length;
+      return `<button class="fc-pill ${activeFilter === m.id ? 'active' : ''}" onclick="navigate('#flashcards/${m.id}')">M${m.id}: ${m.title.split(':')[0].trim()} (${count})</button>`;
+    })
+  ].join('');
+
+  const card = filteredCards[fcState.current];
+  const cardHtml = card ? `
+    <div class="fc-counter">Card ${fcState.current + 1} of ${totalCards}${known.has(card.id) ? ' · <span style="color:var(--green);font-weight:600;">✓ Known</span>' : ''}</div>
+    <div class="fc-card-wrap" onclick="fcFlip()">
+      <div class="fc-card" id="fc-card">
+        <div class="fc-face fc-front">
+          <div class="fc-face-tag">TERM</div>
+          <div class="fc-term">${card.term}</div>
+          <div class="fc-module-label">Module ${card.moduleId} · ${card.moduleName}</div>
+          <div class="fc-flip-hint">Click to reveal definition</div>
+        </div>
+        <div class="fc-face fc-back">
+          <div class="fc-face-tag">DEFINITION</div>
+          <div class="fc-definition">${card.definition}</div>
+          <div class="fc-flip-hint">Click to flip back</div>
+        </div>
+      </div>
+    </div>
+    <div class="fc-actions">
+      <button class="fc-btn-know" onclick="fcMarkKnown()">✓ Know It</button>
+      <button class="fc-btn-learning" onclick="fcMarkLearning()">Still Learning</button>
+    </div>
+    <div class="fc-nav-row">
+      <button class="fc-btn-nav" onclick="fcPrev()" ${fcState.current === 0 ? 'disabled' : ''}>← Prev</button>
+      <button class="fc-btn-nav" onclick="fcNext()" ${fcState.current >= totalCards - 1 ? 'disabled' : ''}>Next →</button>
+    </div>` : `
+    <div class="fc-done-state">
+      <div class="fc-known-badge">${knownPct}%</div>
+      <h2>No cards to show!</h2>
+      <p>Select a different filter or reset your progress to start over.</p>
+      <button class="btn btn-primary" onclick="navigate('#flashcards')">All Cards</button>
+    </div>`;
+
+  setMain(`
+    <div class="flashcards-view">
+      <div class="fc-header">
+        <h1>🃏 Flashcards</h1>
+        <p>Memorize key OSHA terms. Flip each card, then mark whether you know it.</p>
+      </div>
+      <div class="fc-stats-row">
+        <div class="fc-stat"><div class="fc-stat-val">${totalCards}</div><div class="fc-stat-label">Total Cards</div></div>
+        <div class="fc-stat known"><div class="fc-stat-val">${knownCount}</div><div class="fc-stat-label">Know It</div></div>
+        <div class="fc-stat learning"><div class="fc-stat-val">${learningCount}</div><div class="fc-stat-label">Still Learning</div></div>
+      </div>
+      <div class="fc-progress-bar-wrap">
+        <div class="fc-progress-bar-fill" style="width:${knownPct}%"></div>
+      </div>
+      <div class="fc-filter-wrap">
+        <div class="fc-filter-label">Filter by Module</div>
+        <div class="fc-filter-pills">${pillsHtml}</div>
+      </div>
+      <div class="fc-arena">${cardHtml}</div>
+      ${knownCount > 0 ? `
+        <div style="text-align:right;margin-top:24px;">
+          <button class="btn btn-outline" style="font-size:0.8rem;padding:7px 14px;" onclick="fcResetKnown()">
+            Reset Known Cards
+          </button>
+        </div>` : ''}
+    </div>`);
+}
+
+function fcFlip() {
+  fcState.flipped = !fcState.flipped;
+  const card = document.getElementById('fc-card');
+  if (card) card.classList.toggle('flipped', fcState.flipped);
+}
+
+function fcMarkKnown() {
+  if (!fcState || !fcState.cards[fcState.current]) return;
+  FC.markKnown(fcState.cards[fcState.current].id);
+  if (fcState.current < fcState.cards.length - 1) fcState.current++;
+  renderFlashcardsView(fcState.filter);
+}
+
+function fcMarkLearning() {
+  if (!fcState || !fcState.cards[fcState.current]) return;
+  FC.markUnknown(fcState.cards[fcState.current].id);
+  if (fcState.current < fcState.cards.length - 1) fcState.current++;
+  renderFlashcardsView(fcState.filter);
+}
+
+function fcNext() {
+  if (!fcState || fcState.current >= fcState.cards.length - 1) return;
+  fcState.current++;
+  fcState.flipped = false;
+  renderFlashcardsView(fcState.filter);
+}
+
+function fcPrev() {
+  if (!fcState || fcState.current <= 0) return;
+  fcState.current--;
+  fcState.flipped = false;
+  renderFlashcardsView(fcState.filter);
+}
+
+function fcResetKnown() {
+  showModal(
+    'Reset Flashcard Progress?',
+    'This will clear all cards marked as "Know It". Your module and exam progress is not affected.',
+    `<button class="btn" style="background:var(--border);color:var(--text);" onclick="hideModal()">Cancel</button>
+     <button class="btn btn-danger" onclick="FC.resetAll();hideModal();renderFlashcardsView(fcState ? fcState.filter : null);">Reset</button>`
+  );
 }
 
 // ── Modal ─────────────────────────────────────────────────────────
