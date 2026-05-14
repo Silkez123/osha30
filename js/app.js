@@ -208,6 +208,18 @@ function renderModuleView(id) {
           <h3>★ Key Facts to Know</h3>
           <ul>${factsList}</ul>
         </div>
+        ${mod.videoId ? `
+        <div class="module-video">
+          <div class="module-video-label">▶ <span>Video</span> — Deeper Learning</div>
+          <div class="module-video-wrap">
+            <iframe
+              src="https://www.youtube.com/embed/${mod.videoId}?rel=0&modestbranding=1"
+              title="Module ${mod.id} Training Video"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              allowfullscreen>
+            </iframe>
+          </div>
+        </div>` : ''}
         ${contentSections}
         <div class="section-nav">
           ${id > 1 ? `<button class="btn btn-outline" onclick="navigate('#module/${id-1}')">← Module ${id-1}</button>` : '<span></span>'}

@@ -3,6 +3,7 @@ const MODULES_PART1 = [
   {
     id: 1, title: "Introduction to OSHA", subtitle: "History, Standards & Worker Rights",
     icon: "⚖️", estimatedTime: "1.5 hrs",
+    videoId: "s12SO9YUitc",
     keyFacts: [
       "The OSH Act was signed into law on December 29, 1970 by President Nixon",
       "Construction industry is covered under 29 CFR Part 1926",
@@ -76,6 +77,7 @@ const MODULES_PART1 = [
   {
     id: 2, title: "Managing Safety & Health", subtitle: "Programs, Hazard Control & Recordkeeping",
     icon: "📋", estimatedTime: "1.5 hrs",
+    videoId: "03ydjfVsWvQ",
     keyFacts: [
       "Hierarchy of Controls (most to least effective): Elimination → Substitution → Engineering → Administrative → PPE",
       "OSHA 300 Log: records work-related injuries and illnesses throughout the year",
@@ -150,6 +152,7 @@ const MODULES_PART1 = [
   {
     id: 3, title: "Focus Four: Fall Hazards", subtitle: "The #1 Cause of Construction Fatalities",
     icon: "🪜", estimatedTime: "2 hrs",
+    videoId: "s9wGT4_s2fo",
     keyFacts: [
       "Falls are the #1 cause of death in the construction industry",
       "Fall protection is required at 6 feet or more in construction (29 CFR 1926.502)",
@@ -221,6 +224,7 @@ const MODULES_PART1 = [
   {
     id: 4, title: "Focus Four: Electrical Hazards", subtitle: "Shock, Arc Flash & Safe Work Practices",
     icon: "⚡", estimatedTime: "1.5 hrs",
+    videoId: "pmtfqDs4A_E",
     keyFacts: [
       "Electrocution is the #2 cause of death in the Focus Four hazards",
       "Overhead power line clearance: minimum 10 feet for voltages up to 50kV",
@@ -305,6 +309,7 @@ const MODULES_PART1 = [
   {
     id: 5, title: "Focus Four: Struck-By Hazards", subtitle: "Flying, Falling, Swinging & Rolling Objects",
     icon: "🪖", estimatedTime: "1 hr",
+    videoId: "hVEmGWitOvI",
     keyFacts: [
       "Struck-by hazards are the #2 cause of construction fatalities overall",
       "4 types: Flying objects, Falling objects, Swinging objects, Rolling objects",
@@ -382,6 +387,7 @@ const MODULES_PART1 = [
   {
     id: 6, title: "Focus Four: Caught-In/Between", subtitle: "Pinch Points, Cave-Ins & Machine Hazards",
     icon: "⚙️", estimatedTime: "1 hr",
+    videoId: "83tUcRoI4Cs",
     keyFacts: [
       "Caught-in/between hazards include pinch points, nip points, shear points, and unguarded rotating parts",
       "Excavation cave-ins are the deadliest caught-in/between hazard",
@@ -459,6 +465,7 @@ const MODULES_PART1 = [
   {
     id: 7, title: "Personal Protective Equipment", subtitle: "Selection, Use & Limitations of PPE",
     icon: "🦺", estimatedTime: "1.5 hrs",
+    videoId: "W-scDL_8664",
     keyFacts: [
       "PPE is the LAST resort in the Hierarchy of Controls — it doesn't eliminate the hazard",
       "Hard hat Class E: 20,000V; Class G: 2,200V; Class C: no electrical protection",
@@ -541,6 +548,7 @@ const MODULES_PART1 = [
   {
     id: 8, title: "Health Hazards & Hazard Communication", subtitle: "GHS, SDS, Silica, Asbestos & Lead",
     icon: "☣️", estimatedTime: "1.5 hrs",
+    videoId: "PkGbof7FeZA",
     keyFacts: [
       "GHS HazCom 2012: labels must have pictogram, signal word, hazard statement, precautionary statement, supplier ID",
       "SDS (Safety Data Sheet) has 16 standardized sections — replaced the MSDS",
@@ -632,6 +640,7 @@ const MODULES_PART1 = [
   {
     id: 9, title: "Stairways & Ladders", subtitle: "Safe Use, Angles & Inspection Requirements",
     icon: "🪜", estimatedTime: "1 hr",
+    videoId: "YOOy75o98bM",
     keyFacts: [
       "Stairways or ladders required at every point of access where there is a break in elevation of 19 inches or more",
       "Stairway handrails for construction: 36–37 inches in height",
@@ -718,6 +727,7 @@ const MODULES_PART1 = [
   {
     id: 10, title: "Scaffolding", subtitle: "Types, Capacities & Fall Protection Requirements",
     icon: "🏗️", estimatedTime: "2 hrs",
+    videoId: "2ka4Nl-B_QA",
     keyFacts: [
       "Fall protection required on scaffolding at 10 feet above a lower level",
       "Supported scaffold safety factor: minimum 4:1 (must support 4x the intended load)",

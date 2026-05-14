@@ -3,6 +3,7 @@ const MODULES_PART2 = [
   {
     id: 11, title: "Excavations & Trenching", subtitle: "Soil Classification, Protective Systems & Cave-In Prevention",
     icon: "⛏️", estimatedTime: "2 hrs",
+    videoId: "UyJyU_iCres",
     keyFacts: [
       "Cave-ins are the #1 killer in excavation work — a cubic yard of soil weighs up to 3,000 lbs",
       "Protective systems required in any excavation 5 feet deep (unless entirely in stable rock)",
@@ -86,6 +87,7 @@ const MODULES_PART2 = [
   {
     id: 12, title: "Cranes & Rigging", subtitle: "Inspections, Power Lines, Load Ratings & Signals",
     icon: "🏗️", estimatedTime: "2 hrs",
+    videoId: "IaGwq0_NQPg",
     keyFacts: [
       "Annual crane inspection required; monthly inspections; daily pre-use inspection by operator",
       "Load charts must be in the cab and accessible to the operator at all times",
@@ -181,6 +183,7 @@ const MODULES_PART2 = [
   {
     id: 13, title: "Tools — Hand & Power", subtitle: "Guards, Grounding & Safe Operating Practices",
     icon: "🔧", estimatedTime: "1 hr",
+    videoId: "ubPFKi9aFqU",
     keyFacts: [
       "All power tools must have manufacturer-required guards in place during operation",
       "Circular saws require blade guards, splitters, and anti-kickback pawls",
@@ -268,6 +271,7 @@ const MODULES_PART2 = [
   {
     id: 14, title: "Materials Handling & Storage", subtitle: "Safe Lifting, Storage, Cylinders & Housekeeping",
     icon: "📦", estimatedTime: "1 hr",
+    videoId: "t9ss5lLEtnI",
     keyFacts: [
       "NIOSH Recommended Weight Limit (RWL): 51 lbs under ideal conditions; less with awkward postures",
       "Proper lift: straight back, bent knees, load close to body, no twisting",
@@ -356,6 +360,7 @@ const MODULES_PART2 = [
   {
     id: 15, title: "Concrete & Masonry", subtitle: "Formwork, Chemical Hazards & Limited Access Zones",
     icon: "🧱", estimatedTime: "1.5 hrs",
+    videoId: "5W6NeapiKVM",
     keyFacts: [
       "Formwork must be designed by a qualified person and support wet concrete (approx. 150 lbs/ft³)",
       "Reshoring supports loads after formwork is removed until concrete reaches design strength",
@@ -446,6 +451,7 @@ const MODULES_PART2 = [
   {
     id: 16, title: "Steel Erection", subtitle: "Anchor Bolts, Connectors, CDZ & Fall Protection",
     icon: "🔩", estimatedTime: "1.5 hrs",
+    videoId: "D77F7eGko7Q",
     keyFacts: [
       "Steel erection is covered under 29 CFR 1926 Subpart R",
       "Minimum 4 anchor bolts required per column before crane is released",
@@ -541,6 +547,7 @@ const MODULES_PART2 = [
   {
     id: 17, title: "Fire Protection & Prevention", subtitle: "Fire Classes, Extinguishers & Hot Work",
     icon: "🔥", estimatedTime: "1 hr",
+    videoId: "SkeW06LCWOU",
     keyFacts: [
       "Fire classes: A (ordinary combustibles), B (flammable liquids/gases), C (energized electrical), D (combustible metals), K (cooking fats/oils)",
       "PASS technique: Pull the pin, Aim at the base, Squeeze the handle, Sweep side to side",
@@ -633,6 +640,7 @@ const MODULES_PART2 = [
   {
     id: 18, title: "Welding & Cutting", subtitle: "Fire Prevention, Ventilation & Cylinder Safety",
     icon: "🔆", estimatedTime: "1.5 hrs",
+    videoId: "_RVS8SnDa7k",
     keyFacts: [
       "Fire watch required during AND 30 minutes after all welding/cutting operations",
       "Clear combustibles within 35 feet OR use fire-resistant shields",
@@ -722,6 +730,7 @@ const MODULES_PART2 = [
   {
     id: 19, title: "Motor Vehicles & Equipment", subtitle: "Pre-Operation, ROPS, Spotters & Traffic Safety",
     icon: "🚜", estimatedTime: "1 hr",
+    videoId: "4Yl7iGvLY2s",
     keyFacts: [
       "Daily pre-operation inspections required for all motor vehicles and equipment",
       "ROPS (Rollover Protective Structures) required on most earthmoving equipment",
@@ -801,6 +810,7 @@ const MODULES_PART2 = [
   {
     id: 20, title: "Confined Spaces", subtitle: "Permit Requirements, Atmospheric Testing & Entry Procedures",
     icon: "🕳️", estimatedTime: "1.5 hrs",
+    videoId: "M5yQJe1JGPA",
     keyFacts: [
       "Permit-required confined space: has actual or potential hazardous atmosphere, engulfment hazard, internal entrapment geometry, or other recognized serious hazard",
       "Atmospheric testing ORDER: Oxygen first → Flammable gases second → Toxic substances third",
