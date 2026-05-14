@@ -11,6 +11,7 @@ const Progress = {
     const c = this.getCompleted();
     if (!c.includes(id)) { c.push(id); this._set('completed', c); }
     updateNavProgress();
+    if (typeof pushProgressToCloud === 'function') pushProgressToCloud();
   },
   isComplete(id) { return this.getCompleted().includes(id); },
 
@@ -21,6 +22,7 @@ const Progress = {
     if (!s[id] || pct > s[id].pct) { s[id] = { score, total, pct, date: new Date().toLocaleDateString() }; }
     this._set('scores', s);
     if (pct >= 70) this.markComplete(id);
+    if (typeof pushProgressToCloud === 'function') pushProgressToCloud();
   },
   getScore(id) { return (this.getScores())[id] || null; },
 
@@ -29,11 +31,13 @@ const Progress = {
     const h = this.getExamHistory();
     h.unshift(result);
     this._set('exams', h.slice(0, 10));
+    if (typeof pushProgressToCloud === 'function') pushProgressToCloud();
   },
 
   resetAll() {
     ['completed','scores','exams'].forEach(k => localStorage.removeItem(this.key + '_' + k));
     updateNavProgress();
+    if (typeof pushProgressToCloud === 'function') pushProgressToCloud();
   }
 };
 
@@ -662,9 +666,9 @@ const FC = {
   key: 'osha30_fc_known',
   getKnown() { try { return new Set(JSON.parse(localStorage.getItem(this.key) || '[]')); } catch { return new Set(); } },
   setKnown(s) { localStorage.setItem(this.key, JSON.stringify([...s])); },
-  markKnown(id) { const s = this.getKnown(); s.add(id); this.setKnown(s); },
-  markUnknown(id) { const s = this.getKnown(); s.delete(id); this.setKnown(s); },
-  resetAll() { localStorage.removeItem(this.key); }
+  markKnown(id) { const s = this.getKnown(); s.add(id); this.setKnown(s); if (typeof pushProgressToCloud === 'function') pushProgressToCloud(); },
+  markUnknown(id) { const s = this.getKnown(); s.delete(id); this.setKnown(s); if (typeof pushProgressToCloud === 'function') pushProgressToCloud(); },
+  resetAll() { localStorage.removeItem(this.key); if (typeof pushProgressToCloud === 'function') pushProgressToCloud(); }
 };
 
 function renderFlashcardsView(filterModuleId) {
@@ -812,6 +816,9 @@ function hideModal() {
 document.getElementById('modal-overlay').addEventListener('click', function(e) {
   if (e.target === this) hideModal();
 });
+
+// ── Boot ──────────────────────────────────────────────────────────
+if (typeof initAuth === 'function') initAuth();
 
 // ── Utilities ─────────────────────────────────────────────────────
 function shuffleArray(arr) {
