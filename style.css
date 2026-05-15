@@ -244,6 +244,26 @@ button { cursor: pointer; font-family: inherit; }
 .explanation-box { background: #f0f9f3; border: 1.5px solid #b2e0bf; border-radius: 8px; padding: 14px 16px; margin-top: 16px; font-size: 0.88rem; line-height: 1.6; color: var(--text); }
 .explanation-box strong { color: var(--green); }
 
+/* ── Fill-in-the-Blank ── */
+.fib-wrap { margin-top: 8px; }
+.fib-input {
+  width: 100%; padding: 13px 16px; border-radius: 8px;
+  border: 1.5px solid var(--border); font-size: 1rem; font-family: inherit;
+  color: var(--text); background: #fff; outline: none; transition: border-color 0.15s;
+}
+.fib-input:focus { border-color: var(--blue-accent); box-shadow: 0 0 0 3px rgba(46,107,230,0.1); }
+.fib-input.fib-correct { border-color: var(--green); background: #f0f9f3; }
+.fib-input.fib-incorrect { border-color: var(--red); background: #fff0ee; }
+.fib-result { font-size: 0.9rem; margin-top: 10px; padding: 8px 12px; border-radius: 6px; font-weight: 600; }
+.fib-result-ok { background: #e6f7ec; color: var(--green); }
+.fib-result-err { background: #fff0ee; color: var(--red); font-weight: 400; }
+.fib-result-err strong { font-weight: 700; }
+
+/* ── Select All That Apply ── */
+.sa-label { font-size: 0.75rem; font-weight: 700; color: var(--blue-accent); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 10px; }
+.sa-btn .sa-check { transition: background 0.1s; }
+.sa-btn.selected .sa-check { background: var(--blue-accent); color: #fff; }
+
 .quiz-actions { display: flex; justify-content: space-between; align-items: center; }
 
 /* ── Quiz Results ── */

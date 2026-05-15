@@ -41,6 +41,15 @@ const Progress = {
   }
 };
 
+// ── Quiz Bank (merged from part files loaded before this script) ──
+const QUIZ_BANK = Object.assign(
+  {},
+  typeof QUIZ_BANK_P1 !== 'undefined' ? QUIZ_BANK_P1 : {},
+  typeof QUIZ_BANK_P2 !== 'undefined' ? QUIZ_BANK_P2 : {},
+  typeof QUIZ_BANK_P3 !== 'undefined' ? QUIZ_BANK_P3 : {},
+  typeof QUIZ_BANK_P4 !== 'undefined' ? QUIZ_BANK_P4 : {}
+);
+
 // ── State ────────────────────────────────────────────────────────
 let currentView = '';
 let quizState = null;
@@ -255,15 +264,53 @@ function scrollToSection(i) {
   if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
+// ── Question helpers ──────────────────────────────────────────────
+function qType(q) { return q.type || 'mc'; }
+
+function normFib(s) {
+  return String(s || '').toLowerCase().replace(/[$,\s.]/g, '');
+}
+
+function checkAnswer(q, answer) {
+  const t = qType(q);
+  if (t === 'mc') return answer === q.a;
+  if (t === 'fib') {
+    const n = normFib(answer);
+    if (!n) return false;
+    return n === normFib(q.answer) || (q.accept || []).some(a => normFib(a) === n);
+  }
+  if (t === 'sa') {
+    if (!answer || !q.answers) return false;
+    return [...answer].sort().join(',') === [...q.answers].sort().join(',');
+  }
+  return false;
+}
+
+function hasAnswered(q, answer) {
+  const t = qType(q);
+  if (t === 'mc') return answer !== undefined;
+  if (t === 'fib') return answer !== undefined && String(answer).trim() !== '';
+  if (t === 'sa') return Array.isArray(answer) && answer.length > 0;
+  return false;
+}
+
+function getQuizPool(moduleId) {
+  if (typeof QUIZ_BANK !== 'undefined' && QUIZ_BANK[moduleId] && QUIZ_BANK[moduleId].length) {
+    return QUIZ_BANK[moduleId];
+  }
+  const mod = MODULES.find(m => m.id === moduleId);
+  return mod ? mod.quiz : [];
+}
+
 // ── Quiz View ─────────────────────────────────────────────────────
 function renderQuizView(id) {
   currentView = 'quiz';
   const mod = MODULES.find(m => m.id === id);
   if (!mod) { navigate('#dashboard'); return; }
-
+  const pool = getQuizPool(id);
   quizState = {
     moduleId: id,
-    questions: shuffleArray([...mod.quiz]),
+    questions: shuffleArray([...pool]).slice(0, 10),
     current: 0,
     answers: [],
     revealed: false
@@ -278,60 +325,94 @@ function renderQuizQuestion() {
   const mod = MODULES.find(m => m.id === moduleId);
   const userAnswer = answers[current];
   const revealed = quizState.revealed;
+  const t = qType(q);
+  const letters = ['A','B','C','D'];
 
-  const optionsHtml = q.options.map((opt, i) => {
-    let cls = '';
-    if (revealed) {
-      if (i === q.a) cls = 'correct';
-      else if (i === userAnswer && userAnswer !== q.a) cls = 'incorrect';
-    } else if (i === userAnswer) cls = 'selected';
-    const letters = ['A','B','C','D'];
-    return `<button class="option-btn ${cls}" ${revealed ? 'disabled' : ''} onclick="selectAnswer(${i})">
-      <span class="option-letter">${letters[i]}</span>
-      <span>${opt}</span>
-    </button>`;
-  }).join('');
+  let bodyHtml = '';
+  if (t === 'mc') {
+    bodyHtml = `<div class="options-list">${q.options.map((opt, i) => {
+      let cls = '';
+      if (revealed) {
+        if (i === q.a) cls = 'correct';
+        else if (i === userAnswer && userAnswer !== q.a) cls = 'incorrect';
+      } else if (i === userAnswer) cls = 'selected';
+      return `<button class="option-btn ${cls}" ${revealed ? 'disabled' : ''} onclick="selectAnswer(${i})">
+        <span class="option-letter">${letters[i]}</span><span>${opt}</span></button>`;
+    }).join('')}</div>`;
 
+  } else if (t === 'fib') {
+    const isCorrect = revealed ? checkAnswer(q, userAnswer) : null;
+    bodyHtml = `<div class="fib-wrap">
+      <input type="text" id="fib-input"
+        class="fib-input${revealed ? (isCorrect ? ' fib-correct' : ' fib-incorrect') : ''}"
+        placeholder="Type your answer…"
+        value="${revealed ? (userAnswer || '').replace(/"/g, '&quot;') : ''}"
+        ${revealed ? 'disabled' : ''}
+        oninput="quizState.answers[quizState.current]=this.value" />
+      ${revealed ? `<div class="fib-result ${isCorrect ? 'fib-result-ok' : 'fib-result-err'}">
+        ${isCorrect ? '✓ Correct!' : `✗ Correct answer: <strong>${q.answer}</strong>`}
+      </div>` : ''}
+    </div>`;
+
+  } else if (t === 'sa') {
+    const sel = userAnswer || [];
+    bodyHtml = `<div class="sa-label">Select all that apply</div>
+    <div class="options-list">${q.options.map((opt, i) => {
+      let cls = '';
+      const checked = sel.includes(i);
+      if (revealed) {
+        if (q.answers.includes(i)) cls = 'correct';
+        else if (checked) cls = 'incorrect';
+      } else if (checked) cls = 'selected';
+      return `<button class="option-btn sa-btn ${cls}" ${revealed ? 'disabled' : ''} onclick="toggleSa(${i})">
+        <span class="option-letter sa-check">${checked && !revealed ? '✓' : letters[i]}</span>
+        <span>${opt}</span></button>`;
+    }).join('')}</div>`;
+  }
+
+  const canCheck = !revealed && (t === 'fib' ? true : hasAnswered(q, userAnswer));
   const explanationHtml = revealed
-    ? `<div class="explanation-box"><strong>Explanation:</strong> ${q.explain}</div>`
-    : '';
+    ? `<div class="explanation-box"><strong>Explanation:</strong> ${q.explain}</div>` : '';
 
   setMain(`
     <div class="quiz-view">
       <div class="quiz-header">
-        <div class="module-num-label" style="font-size:0.78rem;font-weight:600;color:var(--orange);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;">
+        <div class="module-num-label" style="font-size:.78rem;font-weight:600;color:var(--orange);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;">
           Module ${moduleId} · Quiz
         </div>
         <h1>${mod.title}</h1>
-        <p>${total} questions · Select the best answer for each</p>
+        <p>${total} questions · ${t === 'sa' ? 'Select all correct answers' : t === 'fib' ? 'Fill in the blank' : 'Select the best answer'}</p>
         <div class="quiz-progress-row">
           <div class="quiz-progress-bar-wrap">
-            <div class="quiz-progress-bar-fill" style="width:${((current + 1) / total) * 100}%"></div>
+            <div class="quiz-progress-bar-fill" style="width:${((current+1)/total)*100}%"></div>
           </div>
-          <span class="quiz-progress-text">Question ${current + 1} of ${total}</span>
+          <span class="quiz-progress-text">Question ${current+1} of ${total}</span>
         </div>
       </div>
-
       <div class="question-card">
-        <div class="question-text">${current + 1}. ${q.q}</div>
-        <div class="options-list">${optionsHtml}</div>
+        <div class="question-text">${current+1}. ${q.q}</div>
+        ${bodyHtml}
         ${explanationHtml}
       </div>
-
       <div class="quiz-actions">
         <button class="btn btn-outline" onclick="navigate('#module/${moduleId}')">← Back to Module</button>
         <div style="display:flex;gap:10px;">
-          ${!revealed && userAnswer !== undefined
-            ? `<button class="btn btn-primary" onclick="revealAnswer()">Check Answer</button>`
-            : revealed
-              ? current < total - 1
-                ? `<button class="btn btn-primary" onclick="nextQuestion()">Next →</button>`
-                : `<button class="btn btn-success" onclick="finishQuiz()">See Results →</button>`
-              : `<button class="btn btn-primary" disabled style="opacity:0.4;">Select an answer</button>`
+          ${!revealed
+            ? canCheck
+              ? `<button class="btn btn-primary" onclick="revealAnswer()">Check Answer</button>`
+              : `<button class="btn btn-primary" disabled style="opacity:.4;">${t==='sa'?'Select answers':'Select an answer'}</button>`
+            : current < total - 1
+              ? `<button class="btn btn-primary" onclick="nextQuestion()">Next →</button>`
+              : `<button class="btn btn-success" onclick="finishQuiz()">See Results →</button>`
           }
         </div>
       </div>
     </div>`);
+
+  if (t === 'fib' && !revealed) {
+    const inp = document.getElementById('fib-input');
+    if (inp) { inp.value = userAnswer || ''; inp.focus(); }
+  }
 }
 
 function selectAnswer(i) {
@@ -340,7 +421,20 @@ function selectAnswer(i) {
   renderQuizQuestion();
 }
 
+function toggleSa(i) {
+  if (quizState.revealed) return;
+  let sel = quizState.answers[quizState.current] || [];
+  sel = sel.includes(i) ? sel.filter(x => x !== i) : [...sel, i];
+  quizState.answers[quizState.current] = sel;
+  renderQuizQuestion();
+}
+
 function revealAnswer() {
+  const q = quizState.questions[quizState.current];
+  if (qType(q) === 'fib') {
+    const inp = document.getElementById('fib-input');
+    quizState.answers[quizState.current] = inp ? inp.value : '';
+  }
   quizState.revealed = true;
   renderQuizQuestion();
 }
@@ -348,14 +442,16 @@ function revealAnswer() {
 function nextQuestion() {
   quizState.current++;
   quizState.revealed = false;
-  if (quizState.answers[quizState.current] !== undefined) quizState.revealed = true;
+  if (hasAnswered(quizState.questions[quizState.current], quizState.answers[quizState.current])) {
+    quizState.revealed = true;
+  }
   renderQuizQuestion();
 }
 
 function finishQuiz() {
   const { questions, answers, moduleId } = quizState;
   let correct = 0;
-  questions.forEach((q, i) => { if (answers[i] === q.a) correct++; });
+  questions.forEach((q, i) => { if (checkAnswer(q, answers[i])) correct++; });
   const pct = Math.round((correct / questions.length) * 100);
   Progress.saveScore(moduleId, correct, questions.length);
   renderQuizResults(moduleId, correct, questions.length, pct, questions, answers);
@@ -449,7 +545,14 @@ function renderExamStart() {
 }
 
 function startExam() {
-  const questions = shuffleArray([...EXAM_QUESTIONS]).slice(0, 100);
+  // Pool from full QUIZ_BANK (1000 q) if available, else fall back to EXAM_QUESTIONS
+  let pool;
+  if (typeof QUIZ_BANK !== 'undefined' && Object.keys(QUIZ_BANK).length > 0) {
+    pool = Object.values(QUIZ_BANK).flat();
+  } else {
+    pool = [...EXAM_QUESTIONS];
+  }
+  const questions = shuffleArray(pool).slice(0, 100);
   examState = {
     questions,
     answers: new Array(questions.length).fill(undefined),
@@ -488,7 +591,7 @@ function renderExamQuestion() {
   const { questions, answers, flagged, current } = examState;
   const q = questions[current];
   const total = questions.length;
-  const answered = answers.filter(a => a !== undefined).length;
+  const answered = questions.filter((q,i) => hasAnswered(q, answers[i])).length;
   const elapsed = Math.floor((Date.now() - examState.startTime) / 1000);
   const remaining = Math.max(0, examState.totalSeconds - elapsed);
   const m = Math.floor(remaining / 60);
@@ -496,21 +599,38 @@ function renderExamQuestion() {
   const timeStr = `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
   const timeClass = remaining < 300 ? 'urgent' : remaining < 900 ? 'warning' : '';
 
-  const dots = questions.map((_, i) => {
+  const dots = questions.map((q, i) => {
     let cls = '';
-    if (answers[i] !== undefined) cls += ' answered';
+    if (hasAnswered(q, answers[i])) cls += ' answered';
     if (flagged.has(i)) cls = ' flagged';
     if (i === current) cls += ' current';
     return `<button class="exam-dot${cls}" onclick="goToExamQ(${i})" title="Q${i+1}"></button>`;
   }).join('');
 
   const letters = ['A','B','C','D'];
-  const optionsHtml = q.options.map((opt, i) =>
-    `<button class="option-btn ${answers[current] === i ? 'selected' : ''}" onclick="selectExamAnswer(${i})">
-      <span class="option-letter">${letters[i]}</span>
-      <span>${opt}</span>
-    </button>`
-  ).join('');
+  const t = qType(q);
+  let questionBody = '';
+  if (t === 'mc') {
+    questionBody = q.options.map((opt, i) =>
+      `<button class="option-btn ${answers[current] === i ? 'selected' : ''}" onclick="selectExamAnswer(${i})">
+        <span class="option-letter">${letters[i]}</span><span>${opt}</span></button>`
+    ).join('');
+  } else if (t === 'fib') {
+    questionBody = `<div class="fib-wrap">
+      <input type="text" id="exam-fib-input" class="fib-input"
+        placeholder="Type your answer…"
+        value="${(answers[current] || '').replace(/"/g,'&quot;')}"
+        oninput="examState.answers[examState.current]=this.value" />
+    </div>`;
+  } else if (t === 'sa') {
+    const sel = answers[current] || [];
+    questionBody = `<div class="sa-label">Select all that apply</div>` +
+      q.options.map((opt, i) =>
+        `<button class="option-btn sa-btn ${sel.includes(i) ? 'selected' : ''}" onclick="toggleExamSa(${i})">
+          <span class="option-letter sa-check">${sel.includes(i) ? '✓' : letters[i]}</span>
+          <span>${opt}</span></button>`
+      ).join('');
+  }
 
   setMain(`
     <div class="exam-view">
@@ -536,7 +656,7 @@ function renderExamQuestion() {
 
       <div class="exam-q-card">
         <div class="exam-q-text">${current + 1}. ${q.q}</div>
-        <div class="options-list">${optionsHtml}</div>
+        <div class="options-list">${questionBody}</div>
       </div>
 
       <div class="exam-actions">
@@ -562,6 +682,14 @@ function selectExamAnswer(i) {
   renderExamQuestion();
 }
 
+function toggleExamSa(i) {
+  if (!examState) return;
+  let sel = examState.answers[examState.current] || [];
+  sel = sel.includes(i) ? sel.filter(x => x !== i) : [...sel, i];
+  examState.answers[examState.current] = sel;
+  renderExamQuestion();
+}
+
 function goToExamQ(i) {
   if (!examState) return;
   examState.current = i;
@@ -577,7 +705,7 @@ function toggleFlag(i) {
 
 function confirmSubmitExam() {
   const { answers, questions } = examState;
-  const unanswered = answers.filter(a => a === undefined).length;
+  const unanswered = questions.filter((q,i) => !hasAnswered(q, answers[i])).length;
   if (unanswered > 0) {
     showModal(
       'Unanswered Questions',
@@ -595,7 +723,7 @@ function submitExam(timedOut) {
   if (examState.timerInterval) clearInterval(examState.timerInterval);
   const { questions, answers } = examState;
   let correct = 0;
-  questions.forEach((q, i) => { if (answers[i] === q.a) correct++; });
+  questions.forEach((q, i) => { if (checkAnswer(q, answers[i])) correct++; });
   const pct = Math.round((correct / questions.length) * 100);
   const pass = pct >= 70;
   const result = {
