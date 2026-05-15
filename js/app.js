@@ -55,6 +55,8 @@ let currentView = '';
 let quizState = null;
 let examState = null;
 let fcState = null;
+let drillState = null;
+let quizResultWrong = [];
 
 // ── Nav & Progress ────────────────────────────────────────────────
 function updateNavProgress() {
@@ -67,6 +69,7 @@ function updateNavProgress() {
   let activeId = 'nav-dashboard';
   if (hash === '#exam') activeId = 'nav-exam';
   else if (hash === '#flashcards') activeId = 'nav-flashcards';
+  else if (hash === '#analytics') activeId = 'nav-analytics';
   const activeEl = document.getElementById(activeId);
   if (activeEl) activeEl.classList.add('active');
 }
@@ -82,6 +85,8 @@ function route() {
   else if (view === 'quiz' && param) renderQuizView(parseInt(param));
   else if (view === 'exam') renderExamStart();
   else if (view === 'flashcards') renderFlashcardsView(param ? parseInt(param) : null);
+  else if (view === 'analytics') renderAnalytics();
+  else if (view === 'drill') { if (drillState) renderDrillQuestion(); else navigate('#dashboard'); }
   else renderDashboard();
 }
 
@@ -460,16 +465,33 @@ function finishQuiz() {
 function renderQuizResults(moduleId, score, total, pct, questions, answers) {
   const pass = pct >= 70;
   const mod = MODULES.find(m => m.id === moduleId);
-  const wrongItems = questions
-    .map((q, i) => ({ q, userAns: answers[i], correct: q.a }))
-    .filter(item => item.userAns !== item.correct)
-    .map(item => `
+
+  const wrongData = questions
+    .map((q, i) => ({ q, userAns: answers[i], wrong: !checkAnswer(q, answers[i]) }))
+    .filter(d => d.wrong);
+  const wrongQuestions = wrongData.map(d => d.q);
+
+  const wrongItems = wrongData.map(({ q, userAns }) => {
+    const t = qType(q);
+    let yourAns, correctAns;
+    if (t === 'mc') {
+      yourAns = q.options[userAns] || 'No answer';
+      correctAns = q.options[q.a];
+    } else if (t === 'fib') {
+      yourAns = userAns ? `"${userAns}"` : 'No answer';
+      correctAns = q.answer;
+    } else if (t === 'sa') {
+      yourAns = Array.isArray(userAns) && userAns.length ? userAns.map(j => q.options[j]).join(', ') : 'No answer';
+      correctAns = q.answers.map(j => q.options[j]).join(', ');
+    }
+    return `
       <div style="background:var(--bg);border-radius:8px;padding:12px 14px;margin-bottom:10px;font-size:0.88rem;">
-        <div style="font-weight:600;color:var(--navy);margin-bottom:6px;">${item.q.q}</div>
-        <div style="color:var(--red);">Your answer: ${item.q.options[item.userAns] || 'No answer'}</div>
-        <div style="color:var(--green);">Correct: ${item.q.options[item.correct]}</div>
-        <div style="color:var(--text-soft);margin-top:4px;">${item.q.explain}</div>
-      </div>`).join('');
+        <div style="font-weight:600;color:var(--navy);margin-bottom:6px;">${q.q}</div>
+        <div style="color:var(--red);">Your answer: ${yourAns}</div>
+        <div style="color:var(--green);">Correct: ${correctAns}</div>
+        <div style="color:var(--text-soft);margin-top:4px;">${q.explain}</div>
+      </div>`;
+  }).join('');
 
   setMain(`
     <div class="results-view">
@@ -496,12 +518,16 @@ function renderQuizResults(moduleId, score, total, pct, questions, answers) {
         </div>` : ''}
       <div class="results-actions">
         <button class="btn btn-outline" onclick="navigate('#module/${moduleId}')">Review Module</button>
+        ${wrongQuestions.length > 0
+          ? `<button class="btn btn-drill" onclick="startDrill(quizResultWrong, '#quiz/${moduleId}', 'Back to Quiz')">🎯 Drill ${wrongQuestions.length} Wrong</button>`
+          : ''}
         <button class="btn btn-primary" onclick="renderQuizView(${moduleId})">Retake Quiz</button>
         ${moduleId < MODULES.length
           ? `<button class="btn btn-success" onclick="navigate('#module/${moduleId + 1}')">Next Module →</button>`
           : `<button class="btn btn-success" onclick="navigate('#exam')">Take Final Exam →</button>`}
       </div>
     </div>`);
+  quizResultWrong = wrongQuestions;
 }
 
 // ── Exam View ─────────────────────────────────────────────────────
@@ -742,11 +768,13 @@ function renderExamResults(result, questions, answers) {
 
   // Category breakdown
   const byModule = {};
+  const examWrongQuestions = [];
   questions.forEach((q, i) => {
     const mod = q.moduleRef || 0;
     if (!byModule[mod]) byModule[mod] = { correct: 0, total: 0, title: q.moduleName || `Module ${mod}` };
     byModule[mod].total++;
-    if (answers[i] === q.a) byModule[mod].correct++;
+    if (checkAnswer(q, answers[i])) byModule[mod].correct++;
+    else examWrongQuestions.push(q);
   });
   const breakdownRows = Object.entries(byModule).map(([mod, data]) => {
     const mpct = Math.round((data.correct / data.total) * 100);
@@ -781,11 +809,374 @@ function renderExamResults(result, questions, answers) {
       </div>
       <div class="results-actions">
         <button class="btn btn-outline" onclick="navigate('#dashboard')">Dashboard</button>
+        ${examWrongQuestions.length > 0
+          ? `<button class="btn btn-drill" onclick="startDrill(examResultWrong, '#exam', 'Back to Exam')">🎯 Drill ${examWrongQuestions.length} Wrong</button>`
+          : ''}
         <button class="btn btn-primary" onclick="navigate('#exam')">Retake Exam</button>
       </div>
       <p style="font-size:0.8rem;color:var(--text-xsoft);margin-top:24px;">
         ⚠ This is a study tool only and does not constitute official OSHA training or certification.
       </p>
+    </div>`);
+  examResultWrong = examWrongQuestions;
+}
+
+let examResultWrong = [];
+
+// ── Drill Mode ────────────────────────────────────────────────────
+function startDrill(wrongQuestions, backHash, backLabel) {
+  if (!wrongQuestions || wrongQuestions.length === 0) return;
+  drillState = {
+    remaining: shuffleArray([...wrongQuestions]),
+    roundAnswers: [],
+    roundResults: [],
+    current: 0,
+    revealed: false,
+    round: 1,
+    totalOriginal: wrongQuestions.length,
+    mastered: 0,
+    backHash,
+    backLabel
+  };
+  currentView = 'drill';
+  navigate('#drill');
+  renderDrillQuestion();
+}
+
+function renderDrillQuestion() {
+  if (!drillState) { navigate('#dashboard'); return; }
+  const { remaining, current, roundAnswers, revealed, round, mastered, totalOriginal } = drillState;
+  const q = remaining[current];
+  const total = remaining.length;
+  const userAnswer = roundAnswers[current];
+  const t = qType(q);
+  const letters = ['A','B','C','D'];
+  const isCorrect = revealed ? checkAnswer(q, userAnswer) : null;
+
+  let bodyHtml = '';
+  if (t === 'mc') {
+    bodyHtml = `<div class="options-list">${q.options.map((opt, i) => {
+      let cls = '';
+      if (revealed) {
+        if (i === q.a) cls = 'correct';
+        else if (i === userAnswer && userAnswer !== q.a) cls = 'incorrect';
+      } else if (i === userAnswer) cls = 'selected';
+      return `<button class="option-btn ${cls}" ${revealed ? 'disabled' : ''} onclick="selectDrillAnswer(${i})">
+        <span class="option-letter">${letters[i]}</span><span>${opt}</span></button>`;
+    }).join('')}</div>`;
+  } else if (t === 'fib') {
+    bodyHtml = `<div class="fib-wrap">
+      <input type="text" id="fib-input"
+        class="fib-input${revealed ? (isCorrect ? ' fib-correct' : ' fib-incorrect') : ''}"
+        placeholder="Type your answer…"
+        value="${revealed ? (userAnswer || '').replace(/"/g, '&quot;') : ''}"
+        ${revealed ? 'disabled' : ''}
+        oninput="drillState.roundAnswers[drillState.current]=this.value" />
+      ${revealed ? `<div class="fib-result ${isCorrect ? 'fib-result-ok' : 'fib-result-err'}">
+        ${isCorrect ? '✓ Correct!' : `✗ Correct answer: <strong>${q.answer}</strong>`}
+      </div>` : ''}
+    </div>`;
+  } else if (t === 'sa') {
+    const sel = userAnswer || [];
+    bodyHtml = `<div class="sa-label">Select all that apply</div>
+    <div class="options-list">${q.options.map((opt, i) => {
+      let cls = '';
+      const checked = sel.includes(i);
+      if (revealed) {
+        if (q.answers.includes(i)) cls = 'correct';
+        else if (checked) cls = 'incorrect';
+      } else if (checked) cls = 'selected';
+      return `<button class="option-btn sa-btn ${cls}" ${revealed ? 'disabled' : ''} onclick="toggleDrillSa(${i})">
+        <span class="option-letter sa-check">${checked && !revealed ? '✓' : letters[i]}</span>
+        <span>${opt}</span></button>`;
+    }).join('')}</div>`;
+  }
+
+  const canCheck = !revealed && (t === 'fib' ? true : hasAnswered(q, userAnswer));
+  const explanationHtml = revealed
+    ? `<div class="explanation-box">
+        <div style="font-weight:700;margin-bottom:4px;color:${isCorrect ? 'var(--green)' : 'var(--red)'};">${isCorrect ? '✓ Correct!' : '✗ Incorrect'}</div>
+        <strong>Explanation:</strong> ${q.explain}
+      </div>` : '';
+  const masteredPct = totalOriginal > 0 ? Math.round((mastered / totalOriginal) * 100) : 0;
+
+  setMain(`
+    <div class="quiz-view">
+      <div class="drill-status-bar">
+        <span class="drill-badge">🎯 Drill · Round ${round}</span>
+        <div class="drill-status-right">
+          <span class="drill-mastered-label">${mastered}/${totalOriginal} mastered</span>
+          <div class="drill-master-bar"><div class="drill-master-fill" style="width:${masteredPct}%"></div></div>
+        </div>
+      </div>
+      <div class="quiz-header">
+        <div class="module-num-label" style="font-size:.78rem;font-weight:600;color:var(--orange);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;">
+          ${q.moduleName || ''} · Weak-Spot Drill
+        </div>
+        <h1>Drill Mode</h1>
+        <p>${total} question${total !== 1 ? 's' : ''} remaining this round</p>
+        <div class="quiz-progress-row">
+          <div class="quiz-progress-bar-wrap">
+            <div class="quiz-progress-bar-fill" style="width:${((current+1)/total)*100}%"></div>
+          </div>
+          <span class="quiz-progress-text">Question ${current+1} of ${total}</span>
+        </div>
+      </div>
+      <div class="question-card">
+        <div class="question-text">${current+1}. ${q.q}</div>
+        ${bodyHtml}
+        ${explanationHtml}
+      </div>
+      <div class="quiz-actions">
+        <button class="btn btn-outline" onclick="confirmStopDrill()">Stop Drilling</button>
+        <div style="display:flex;gap:10px;">
+          ${!revealed
+            ? canCheck
+              ? `<button class="btn btn-primary" onclick="revealDrillAnswer()">Check Answer</button>`
+              : `<button class="btn btn-primary" disabled style="opacity:.4;">${t==='sa'?'Select answers':'Select an answer'}</button>`
+            : current < total - 1
+              ? `<button class="btn btn-primary" onclick="nextDrillQuestion()">Next →</button>`
+              : `<button class="btn btn-success" onclick="finishDrillRound()">Finish Round →</button>`
+          }
+        </div>
+      </div>
+    </div>`);
+
+  if (t === 'fib' && !revealed) {
+    const inp = document.getElementById('fib-input');
+    if (inp) { inp.value = userAnswer || ''; inp.focus(); }
+  }
+}
+
+function selectDrillAnswer(i) {
+  if (drillState.revealed) return;
+  drillState.roundAnswers[drillState.current] = i;
+  renderDrillQuestion();
+}
+
+function toggleDrillSa(i) {
+  if (drillState.revealed) return;
+  let sel = drillState.roundAnswers[drillState.current] || [];
+  sel = sel.includes(i) ? sel.filter(x => x !== i) : [...sel, i];
+  drillState.roundAnswers[drillState.current] = sel;
+  renderDrillQuestion();
+}
+
+function revealDrillAnswer() {
+  const q = drillState.remaining[drillState.current];
+  if (qType(q) === 'fib') {
+    const inp = document.getElementById('fib-input');
+    drillState.roundAnswers[drillState.current] = inp ? inp.value : '';
+  }
+  drillState.roundResults[drillState.current] = checkAnswer(q, drillState.roundAnswers[drillState.current]);
+  drillState.revealed = true;
+  renderDrillQuestion();
+}
+
+function nextDrillQuestion() {
+  drillState.current++;
+  drillState.revealed = false;
+  renderDrillQuestion();
+}
+
+function finishDrillRound() {
+  const { remaining, roundResults, mastered, round } = drillState;
+  const justMastered = roundResults.filter(Boolean).length;
+  const newRemaining = remaining.filter((_, i) => !roundResults[i]);
+
+  drillState.mastered = mastered + justMastered;
+  drillState.remaining = shuffleArray(newRemaining);
+  drillState.roundAnswers = [];
+  drillState.roundResults = [];
+  drillState.current = 0;
+  drillState.revealed = false;
+  drillState.round++;
+
+  if (newRemaining.length === 0) {
+    renderDrillMastery();
+  } else {
+    renderDrillRoundSummary(justMastered, newRemaining.length);
+  }
+}
+
+function renderDrillRoundSummary(justMastered, remaining) {
+  const { round, mastered, totalOriginal, backHash } = drillState;
+  setMain(`
+    <div class="results-view">
+      <div style="font-size:3.5rem;margin-bottom:12px;">🔄</div>
+      <div class="results-title">Round ${round - 1} Complete</div>
+      <div class="results-sub">
+        ${justMastered > 0
+          ? `You mastered <strong>${justMastered}</strong> more question${justMastered !== 1 ? 's' : ''}. Keep it up!`
+          : `Don't worry — repetition is how it sticks. Give it another go!`}
+      </div>
+      <div class="results-breakdown">
+        <div class="results-row"><span>Mastered This Round</span><strong style="color:var(--green);">+${justMastered}</strong></div>
+        <div class="results-row"><span>Total Mastered</span><strong style="color:var(--green);">${mastered} / ${totalOriginal}</strong></div>
+        <div class="results-row"><span>Still Drilling</span><strong style="color:var(--orange);">${remaining}</strong></div>
+      </div>
+      <div class="results-actions">
+        <button class="btn btn-outline" onclick="navigate('${backHash}');drillState=null;">Stop Drilling</button>
+        <button class="btn btn-primary" onclick="renderDrillQuestion()">Round ${round} →</button>
+      </div>
+    </div>`);
+}
+
+function renderDrillMastery() {
+  const { round, totalOriginal, backHash, backLabel } = drillState;
+  setMain(`
+    <div class="results-view">
+      <div style="font-size:4rem;margin-bottom:12px;">🏆</div>
+      <div class="results-title">All Mastered!</div>
+      <div class="results-sub">
+        You got all ${totalOriginal} drill question${totalOriginal !== 1 ? 's' : ''} correct
+        ${round > 2 ? ` across ${round - 1} rounds` : ''}. Excellent work!
+      </div>
+      <div class="results-actions">
+        <button class="btn btn-primary" onclick="navigate('${backHash}');drillState=null;">${backLabel}</button>
+      </div>
+    </div>`);
+}
+
+function confirmStopDrill() {
+  const bh = drillState ? drillState.backHash : '#dashboard';
+  showModal(
+    'Stop Drilling?',
+    'Your drill progress for this round will be lost.',
+    `<button class="btn" style="background:var(--border);color:var(--text);" onclick="hideModal()">Keep Drilling</button>
+     <button class="btn btn-danger" onclick="hideModal();navigate('${bh}');drillState=null;">Stop</button>`
+  );
+}
+
+// ── Analytics ─────────────────────────────────────────────────────
+function renderAnalytics() {
+  currentView = 'analytics';
+  const scores = Progress.getScores();
+  const completed = Progress.getCompleted();
+  const exams = Progress.getExamHistory();
+
+  const moduleScores = MODULES.map(m => scores[m.id] ? scores[m.id].pct : 0);
+  const attempted = MODULES.filter(m => scores[m.id]);
+  const quizAvg = attempted.length
+    ? Math.round(moduleScores.reduce((a, b) => a + b, 0) / MODULES.length)
+    : 0;
+  const bestExam = exams.length ? Math.max(...exams.map(e => e.pct)) : null;
+  const readiness = bestExam !== null
+    ? Math.round(quizAvg * 0.7 + bestExam * 0.3)
+    : quizAvg;
+
+  const readinessLabel = readiness >= 85 ? 'Exam Ready' : readiness >= 70 ? 'Almost Ready' : readiness >= 50 ? 'Getting There' : 'Keep Studying';
+  const readinessColor = readiness >= 85 ? 'var(--green)' : readiness >= 70 ? '#f59e0b' : readiness >= 50 ? 'var(--orange)' : 'var(--red)';
+  const readinessBg = readiness >= 85 ? '#e6f7ec' : readiness >= 70 ? '#fef3c7' : readiness >= 50 ? '#fff3ee' : '#fff0ee';
+
+  const moduleBars = MODULES.map(m => {
+    const sc = scores[m.id];
+    const pct = sc ? sc.pct : 0;
+    const done = completed.includes(m.id);
+    const barColor = !sc ? 'var(--border)' : pct >= 85 ? 'var(--green)' : pct >= 70 ? '#f59e0b' : 'var(--red)';
+    const pctColor = !sc ? 'var(--text-xsoft)' : pct >= 85 ? 'var(--green)' : pct >= 70 ? '#b45309' : 'var(--red)';
+    return `
+      <div class="analytics-module-row" onclick="navigate('#module/${m.id}')">
+        <div class="analytics-mod-label">
+          <span class="analytics-mod-num">M${m.id}</span>
+          <span class="analytics-mod-name">${m.title}</span>
+          ${done ? '<span class="analytics-done-chip">✓</span>' : ''}
+        </div>
+        <div class="analytics-bar-wrap">
+          <div class="analytics-bar-fill" style="width:${pct}%;background:${barColor};"></div>
+          <div class="analytics-threshold-line"></div>
+        </div>
+        <div class="analytics-mod-pct" style="color:${pctColor};">${sc ? pct + '%' : '—'}</div>
+        <button class="analytics-action-btn" onclick="event.stopPropagation();navigate('#quiz/${m.id}')">
+          ${sc ? 'Retake' : 'Start'}
+        </button>
+      </div>`;
+  }).join('');
+
+  const weakModules = MODULES
+    .filter(m => !scores[m.id] || scores[m.id].pct < 70)
+    .sort((a, b) => (scores[a.id] ? scores[a.id].pct : -1) - (scores[b.id] ? scores[b.id].pct : -1));
+
+  const focusHtml = weakModules.length === 0
+    ? '<p style="color:var(--green);font-weight:600;padding:16px 0;">✓ All 20 modules passed — you\'re ready for the exam!</p>'
+    : weakModules.slice(0, 6).map(m => {
+        const sc = scores[m.id];
+        return `
+          <div class="focus-item">
+            <div>
+              <div class="focus-title">Module ${m.id}: ${m.title}</div>
+              <div class="focus-score">${sc ? `Last score: ${sc.pct}% — needs ${70 - sc.pct}% more` : 'Not attempted yet'}</div>
+            </div>
+            <button class="btn btn-primary" style="font-size:0.8rem;padding:7px 14px;white-space:nowrap;"
+              onclick="navigate('#quiz/${m.id}')">
+              ${sc ? 'Retake Quiz' : 'Take Quiz'} →
+            </button>
+          </div>`;
+      }).join('');
+
+  const examHistHtml = exams.length === 0
+    ? '<p style="color:var(--text-soft);padding:12px 0;">No exam attempts yet. <a href="#exam" style="color:var(--blue-accent);font-weight:600;">Take the final exam →</a></p>'
+    : `<table class="history-table">
+        <thead><tr><th>Date</th><th>Score</th><th>Result</th></tr></thead>
+        <tbody>${exams.map(e => `
+          <tr>
+            <td>${e.date}</td>
+            <td>${e.correct}/${e.total} (${e.pct}%)</td>
+            <td><span class="${e.pass ? 'pass-chip' : 'fail-chip'}">${e.pass ? 'PASS' : 'FAIL'}</span></td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+      <div style="margin-top:16px;">
+        <button class="btn btn-primary" onclick="navigate('#exam')">Take Final Exam →</button>
+      </div>`;
+
+  setMain(`
+    <div class="analytics-view">
+      <div class="analytics-header">
+        <h1>📊 Progress Analytics</h1>
+        <p>Your study performance across all 20 modules.</p>
+      </div>
+
+      <div class="readiness-card" style="background:${readinessBg};border-color:${readinessColor};">
+        <div class="readiness-score" style="color:${readinessColor};">${readiness}%</div>
+        <div class="readiness-label" style="color:${readinessColor};">${readinessLabel}</div>
+        <div class="readiness-sub">
+          ${attempted.length} of ${MODULES.length} modules attempted · ${completed.length} passed
+          ${bestExam !== null ? ` · Best exam: ${bestExam}%` : ''}
+        </div>
+        <div class="readiness-bar-wrap">
+          <div class="readiness-bar-fill" style="width:${readiness}%;background:${readinessColor};"></div>
+        </div>
+      </div>
+
+      <div class="stats-row" style="margin-bottom:28px;">
+        <div class="stat-card orange"><div class="stat-val">${completed.length}</div><div class="stat-label">Modules Passed</div></div>
+        <div class="stat-card"><div class="stat-val">${MODULES.length - completed.length}</div><div class="stat-label">Remaining</div></div>
+        <div class="stat-card blue"><div class="stat-val">${attempted.length ? Math.round(Object.values(scores).reduce((a,s)=>a+s.pct,0)/attempted.length) : '—'}${attempted.length ? '%' : ''}</div><div class="stat-label">Avg Quiz Score</div></div>
+        <div class="stat-card green"><div class="stat-val">${bestExam !== null ? bestExam + '%' : '—'}</div><div class="stat-label">Best Exam</div></div>
+      </div>
+
+      <div class="analytics-section">
+        <div class="section-heading">Performance by Module</div>
+        <div class="analytics-legend">
+          <span class="legend-dot" style="background:var(--green)"></span><span>≥85% Strong</span>
+          <span class="legend-dot" style="background:#f59e0b"></span><span>70–84% Passing</span>
+          <span class="legend-dot" style="background:var(--red)"></span><span>&lt;70% Needs Work</span>
+          <span class="legend-dot" style="background:var(--border)"></span><span>Not Attempted</span>
+        </div>
+        <div class="analytics-modules">${moduleBars}</div>
+      </div>
+
+      <div class="analytics-section">
+        <div class="section-heading">Focus Areas</div>
+        <p style="font-size:0.85rem;color:var(--text-soft);margin-bottom:16px;">Modules scoring below 70% or not yet attempted, worst first.</p>
+        <div class="focus-list">${focusHtml}</div>
+      </div>
+
+      <div class="analytics-section">
+        <div class="section-heading">Exam History</div>
+        ${examHistHtml}
+      </div>
     </div>`);
 }
 
